@@ -1,0 +1,8 @@
+add_subdirectory(bandpass)
+add_subdirectory(picotemp)
+add_subdirectory(highpass)
+add_subdirectory(lowpass)
+add_subdirectory(serial_print)
+add_subdirectory(digital_io)
+add_subdirectory(pico_debug_uart)
+add_subdirectory(RTT)

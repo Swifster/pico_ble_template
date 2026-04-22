@@ -1,0 +1,187 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flash(SSH)",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; SERIAL=\"$CMSIS_DAP_SERIAL_NUMBER\"; echo \"Using CMSIS-DAP serial: $SERIAL\"; ssh ${PICO_REMOTE_USER}@${PICO_REMOTE_HOST} \"sudo openocd -f interface/cmsis-dap.cfg -c 'adapter serial $SERIAL' -f target/${PICO_UPLOAD_TARGET}.cfg -c 'adapter speed 5000' -c 'program ${PICO_REMOTE_PATH}/${PICO_FIRMWARE_NAME}.elf verify reset exit'\"",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+      }
+    },
+    {
+      "label": "Compile",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "sh",
+      "args": [
+        "-c",
+        "${config:cmake.cmakePath} --fresh -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPICO_DEOPTIMIZED_DEBUG=1 && ${config:cmake.cmakePath} --build build"
+      ],
+      "problemMatcher": "$gcc",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Clean Build",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "sh",
+      "args": [
+        "-c",
+        "rm -rf build && ${config:cmake.cmakePath} -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPICO_DEOPTIMIZED_DEBUG=1 && ${config:cmake.cmakePath} --build build"
+      ],
+      "problemMatcher": "$gcc",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Flash(USB)",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; ${env:HOME}/.pico-sdk/picotool/${PICO_SDK_VERSION}/picotool/picotool load \"${workspaceFolder}/build/${PICO_FIRMWARE_NAME}.elf\" -fx"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": [],
+      "windows": {
+        "command": "${env:USERPROFILE}/.pico-sdk/picotool/${env:PICO_SDK_VERSION}/picotool/picotool.exe"
+      }
+    },
+    {
+      "label": "Flash(J-Link)",
+      "type": "shell",
+      "dependsOn": "Compile",
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "sh",
+      "args": [
+        "${workspaceFolder}/.vscode/flash_jlink.sh",
+        "${workspaceFolder}",
+        "${config:pico.jlinkSerialNumber}"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Probe(Upload)",
+      "type": "shell",
+      "dependsOn": "Compile",
+      "dependsOrder": "sequence",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; SERIAL=\"$CMSIS_DAP_SERIAL_NUMBER\"; echo \"Using CMSIS-DAP serial: $SERIAL\"; ${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd -s ${userHome}/.pico-sdk/openocd/0.12.0+dev/scripts -f interface/cmsis-dap.cfg -c \"adapter serial $SERIAL\" -f target/${PICO_UPLOAD_TARGET}.cfg -c \"adapter speed 5000\" -c \"program \\\"${workspaceFolder}/build/${PICO_FIRMWARE_NAME}.elf\\\" verify reset exit\" && if [ -t 1 ]; then printf \"$(tput setaf 2)Probe serial: $SERIAL$(tput sgr0)\\n\"; printf \"$(tput setaf 2)Flash USB successful$(tput sgr0)\\n\"; else echo \"Probe serial: $SERIAL\"; echo \"Flash USB successful\"; fi"
+      ],
+      "problemMatcher": [],
+      "windows": {
+        "command": "${env:USERPROFILE}/.pico-sdk/openocd/0.12.0+dev/openocd.exe"
+      }
+    },
+    {
+      "label": "Upload .elf(SSH)",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; scp \"${workspaceFolder}/build/${PICO_FIRMWARE_NAME}.elf\" ${PICO_REMOTE_USER}@${PICO_REMOTE_HOST}:${PICO_REMOTE_PATH}/${PICO_FIRMWARE_NAME}.elf && if [ -t 1 ]; then printf \"$(tput setaf 2)Upload successful$(tput sgr0)\\n\"; else echo \"Upload successful\"; fi"
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "Delete .elf(SSH)",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; ssh ${PICO_REMOTE_USER}@${PICO_REMOTE_HOST} \"rm -f ${PICO_REMOTE_PATH}/${PICO_FIRMWARE_NAME}.elf && if [ -t 1 ]; then printf \\\"$(tput setaf 2)Delete successful$(tput sgr0)\\\\n\\\"; else echo \\\"Delete successful\\\"; fi\""
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+      }
+    },
+    {
+      "label": "Debug Serv",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; SERIAL=\"$CMSIS_DAP_SERIAL_NUMBER\"; echo \"Using CMSIS-DAP serial: $SERIAL\"; ssh ${PICO_REMOTE_USER}@${PICO_REMOTE_HOST} \"sudo openocd -f interface/cmsis-dap.cfg -c \\\"adapter serial $SERIAL\\\" -f target/${PICO_UPLOAD_TARGET}.cfg -c \\\"adapter speed 5000\\\" -c \\\"bindto 0.0.0.0\\\" -c \\\"gdb_port 3333\\\"\""
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "Kill Serv",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; ssh ${PICO_REMOTE_USER}@${PICO_REMOTE_HOST} \"echo shutdown | nc 127.0.0.1 4444 || sudo pkill -f openocd\""
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "SSH Upload",
+      "type": "shell",
+      "dependsOn": "Upload .elf(SSH)",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -e; . \"${workspaceFolder}/build/project_configuration.sh\"; ssh ${PICO_REMOTE_USER}@${PICO_REMOTE_HOST} \"sudo openocd -f interface/cmsis-dap.cfg -f target/${PICO_UPLOAD_TARGET}.cfg -c \\\"adapter speed 5000\\\" -c \\\"program ${PICO_REMOTE_PATH}/${PICO_FIRMWARE_NAME}.elf verify reset exit\\\"\""
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "Compile Upload(SSH)",
+      "detail": "Compiles, uploads, flashes, and cleans",
+      "dependsOn": [
+        "Compile",
+        "Upload .elf(SSH)",
+        "SSH Upload",
+        "Delete .elf(SSH)"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+  ]
+}

@@ -1,0 +1,15 @@
+[
+    {
+        "name": "Pico",
+        "compilers": {
+            "C": "/Users/tanelkaus/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gcc",
+            "CXX": "/Users/tanelkaus/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-g++"
+        },
+        "environmentVariables": {
+            "PATH": "/Users/tanelkaus/.pico-sdk/toolchain/14_2_Rel1/bin:${env:PATH}"
+        },
+        "cmakeSettings": {
+            "Python3_EXECUTABLE": "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+        }
+    }
+]

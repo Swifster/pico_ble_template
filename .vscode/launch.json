@@ -1,0 +1,116 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Pico Debug (Cortex-Debug-Local)",
+            "cwd": "${userHome}/.pico-sdk/openocd/0.12.0+dev/scripts",
+            "executable": "${workspaceFolder}/build/${config:pico.firmwareName}.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "serverpath": "${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            "gdbPath": "arm-none-eabi-gdb",
+            "device": "${config:pico.uploadTargetUppercase}",
+            "configFiles": [
+                "interface/cmsis-dap.cfg",
+                "target/${config:pico.uploadTarget}.cfg"
+            ],
+            "svdFile": "${config:cmake.configureEnvironment.PICO_SDK_PATH}/src/${config:pico.uploadTarget}/hardware_regs/${config:pico.uploadTargetUppercase}.svd",
+            "runToEntryPoint": "main",
+            // Fix for no_flash binaries, where monitor reset halt doesn't do what is expected
+            // Also works fine for flash binaries
+            "overrideLaunchCommands": [
+                "monitor reset init",
+                "load \"${workspaceFolder}/build/${config:pico.firmwareName}.elf\""
+            ],
+            "openOCDLaunchCommands": [
+                "adapter speed 5000"
+            ]
+        },
+        {
+            "name": "Pico Debug (Cortex-Debug Remote OpenOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "external",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/${config:pico.firmwareName}.elf",
+            "gdbPath": "arm-none-eabi-gdb",
+            "gdbTarget": "${config:pico.uploadHostName}:3333",
+            "device": "${config:pico.uploadTarget}",
+            "svdFile": "${config:cmake.configureEnvironment.PICO_SDK_PATH}/src/${config:pico.uploadTarget}/hardware_regs/${config:pico.uploadTargetUppercase}.svd",
+            "runToEntryPoint": "main",
+            "numberOfProcessors": 2,
+            "preLaunchCommands": [
+                "monitor reset halt"
+            ]
+        },
+        {
+            "name": "Pico Debug (Cortex-Debug with external OpenOCD)",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceFolder}/build/${config:pico.firmwareName}.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "external",
+            "gdbTarget": "localhost:3333",
+            "gdbPath": "arm-none-eabi-gdb",
+            "device": "${config:pico.uploadTargetUppercase}",
+            "svdFile": "${config:cmake.configureEnvironment.PICO_SDK_PATH}/src/${config:pico.uploadTarget}/hardware_regs/${config:pico.uploadTargetUppercase}.svd",
+            "runToEntryPoint": "main",
+            // Fix for no_flash binaries, where monitor reset halt doesn't do what is expected
+            // Also works fine for flash binaries
+            "overrideLaunchCommands": [
+                "monitor reset init",
+                "load \"${workspaceFolder}/build/${config:pico.firmwareName}.elf\""
+            ]
+        },
+        {
+            "name": "Pico Debug (WIN C++ Debugger)",
+            "type": "cppdbg",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "program": "${workspaceFolder}/build/${config:pico.firmwareName}.elf",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "debugServerPath": "${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
+            "debugServerArgs": "-f interface/cmsis-dap.cfg -f target/${config:pico.uploadTarget}.cfg -c \"adapter speed 5000\"",
+            "serverStarted": "Listening on port .* for gdb connections",
+            "filterStderr": true,
+            "envFile": "${workspaceFolder}/build/project_configuration.env",
+            "hardwareBreakpoints": {
+                "require": true,
+                "limit": 4
+            },
+            "preLaunchTask": "Probe(Upload)",
+            "svdPath": "${config:cmake.configureEnvironment.PICO_SDK_PATH}/src/${config:pico.uploadTarget}/hardware_regs/${config:pico.uploadTargetUppercase}.svd"
+        },
+        {
+            "name": "J-Link",
+            "cwd": "${workspaceRoot}",
+            //"gdbPath": "gdb-multiarch",
+            "gdbPath": "/Users/tanelkaus/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gdb",
+            "executable": "${workspaceFolder}/build/${config:pico.firmwareName}.elf",
+            "servertype": "jlink",
+            "serverpath": "/usr/local/bin/JLinkGDBServer",
+            "armToolchainPath": "/Users/tanelkaus/.pico-sdk/toolchain/14_2_Rel1/bin",
+            "request": "launch",
+            "type": "cortex-debug",
+            "interface": "swd",
+            "serialNumber": "${config:pico.jlinkSerialNumber}",
+            "device": "RP2040_M0_0",
+            "svdPath": "${config:cmake.configureEnvironment.PICO_SDK_PATH}/src/${config:pico.uploadTarget}/hardware_regs/${config:pico.uploadTargetUppercase}.svd",
+            "rttConfig": {
+                "enabled": true,
+                "address": "0x200014c0",
+                "decoders": [
+                    {
+                        "label": "RTT",
+                        "port": 0,
+                        "type": "console"
+                    }
+                ]
+            },
+            "runToEntryPoint": "main"
+        },
+    ]
+}
