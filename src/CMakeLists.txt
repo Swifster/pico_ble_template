@@ -24,7 +24,7 @@ target_include_directories(${FIRMWARE_NAME}  PRIVATE
 
 # Enable standard I/O over USB/UART
 pico_enable_stdio_usb(${FIRMWARE_NAME}  1)
-pico_enable_stdio_uart(${FIRMWARE_NAME}  0)
+pico_enable_stdio_uart(${FIRMWARE_NAME}  1)
 
 # Add extra outputs (e.g., .bin, .elf, etc.)
 pico_add_extra_outputs(${FIRMWARE_NAME} )

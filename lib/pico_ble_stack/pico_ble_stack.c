@@ -18,6 +18,12 @@
 #define ADC_CHANNEL_TEMPSENSOR 4
 #define APP_AD_FLAGS 0x06
 
+typedef enum {
+    LED_MODE_BLINK,
+    LED_MODE_ON,
+    LED_MODE_OFF,
+} led_mode_t;
+
 static uint8_t adv_data[] = {
     0x02, BLUETOOTH_DATA_TYPE_FLAGS, APP_AD_FLAGS,
     0x11, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
@@ -27,8 +33,8 @@ static uint8_t adv_data[] = {
 static const uint8_t adv_data_len = sizeof(adv_data);
 
 static const uint8_t scan_response_data[] = {
-    0x05, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
-    'U', 'A', 'R', 'T',
+    0x08, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
+    'U', 'A', 'R', 'T', '-', 'N', 'D',
 };
 static const uint8_t scan_response_data_len = sizeof(scan_response_data);
 
@@ -37,7 +43,7 @@ static float current_temp_c;
 static unsigned spp_counter;
 static char spp_line[64];
 static uint16_t spp_line_len;
-static btstack_timer_source_t heartbeat;
+static led_mode_t led_mode = LED_MODE_OFF;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_context_callback_registration_t spp_send_request;
 static pico_ble_stack_handlers_t handlers;
@@ -45,6 +51,73 @@ static pico_ble_stack_handlers_t handlers;
 extern uint8_t const profile_data[];
 
 static void nordic_can_send(void *context);
+
+static void apply_led_mode(void)
+{
+    if (led_mode == LED_MODE_ON) {
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+    } else if (led_mode == LED_MODE_OFF) {
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+    }
+}
+
+static const char *led_mode_name(void)
+{
+    switch (led_mode) {
+    case LED_MODE_ON:
+        return "on";
+    case LED_MODE_OFF:
+        return "off";
+    case LED_MODE_BLINK:
+    default:
+        return "blink";
+    }
+}
+
+static bool command_char_is_space(char value)
+{
+    return value == ' ' || value == '\t' || value == '\r' || value == '\n';
+}
+
+static uint16_t normalize_command(const uint8_t *packet, uint16_t size, char *command, uint16_t command_size)
+{
+    uint16_t start = 0;
+    while (start < size && command_char_is_space((char)packet[start])) {
+        start++;
+    }
+
+    uint16_t end = size;
+    while (end > start && command_char_is_space((char)packet[end - 1])) {
+        end--;
+    }
+
+    uint16_t out = 0;
+    bool previous_was_space = false;
+    for (uint16_t i = start; i < end && out + 1 < command_size; i++) {
+        char value = (char)packet[i];
+        if (command_char_is_space(value)) {
+            if (!previous_was_space) {
+                command[out++] = ' ';
+                previous_was_space = true;
+            }
+            continue;
+        }
+
+        if (value >= 'A' && value <= 'Z') {
+            value = (char)(value - 'A' + 'a');
+        }
+        command[out++] = value;
+        previous_was_space = false;
+    }
+
+    command[out] = '\0';
+    return out;
+}
+
+static bool command_equals(const char *command, const char *expected)
+{
+    return strcmp(command, expected) == 0;
+}
 
 static void poll_temp(void)
 {
@@ -60,14 +133,74 @@ static void poll_temp(void)
     printf("Write temp %.2f degc\n", current_temp_c);
 }
 
-static void build_spp_line(void)
+static void handle_default_uart_command(const uint8_t *packet, uint16_t size)
 {
-    spp_counter++;
-    spp_line_len = (uint16_t)snprintf(spp_line,
-                                      sizeof(spp_line),
-                                      "demo,%u,temp_c=%.2f\r\n",
-                                      spp_counter,
-                                      current_temp_c);
+    char command[48];
+    if (normalize_command(packet, size, command, sizeof(command)) == 0) {
+        return;
+    }
+
+    printf("Bluefruit command: %s\n", command);
+
+    if (command_equals(command, "light led") ||
+        command_equals(command, "led on") ||
+        command_equals(command, "on")) {
+        led_mode = LED_MODE_ON;
+        apply_led_mode();
+        pico_ble_stack_uart_send("ok,led=on\r\n");
+        return;
+    }
+
+    if (command_equals(command, "led off") ||
+        command_equals(command, "off")) {
+        led_mode = LED_MODE_OFF;
+        apply_led_mode();
+        pico_ble_stack_uart_send("ok,led=off\r\n");
+        return;
+    }
+
+    if (command_equals(command, "led toggle") ||
+        command_equals(command, "toggle led") ||
+        command_equals(command, "toggle")) {
+        led_mode = led_mode == LED_MODE_ON ? LED_MODE_OFF : LED_MODE_ON;
+        apply_led_mode();
+        pico_ble_stack_uart_sendf("ok,led=%s\r\n", led_mode_name());
+        return;
+    }
+
+    if (command_equals(command, "led blink") ||
+        command_equals(command, "blink led") ||
+        command_equals(command, "blink")) {
+        led_mode = LED_MODE_BLINK;
+        pico_ble_stack_uart_send("ok,led=blink\r\n");
+        return;
+    }
+
+    if (command_equals(command, "temp") ||
+        command_equals(command, "status")) {
+        pico_ble_stack_uart_sendf("status,temp_c=%.2f,led=%s\r\n",
+                                  current_temp_c,
+                                  led_mode_name());
+        return;
+    }
+
+    if (command_equals(command, "help")) {
+        pico_ble_stack_uart_send("commands: light led, led off, led toggle, led blink, temp\r\n");
+        return;
+    }
+
+    pico_ble_stack_uart_sendf("error,unknown command: %s\r\n", command);
+}
+
+static void handle_default_tick(void)
+{
+    if (led_mode == LED_MODE_BLINK) {
+        static bool led_on = true;
+        led_on = !led_on;
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_on);
+    } else {
+        apply_led_mode();
+    }
 }
 
 void pico_ble_stack_set_handlers(const pico_ble_stack_handlers_t *new_handlers)
@@ -199,6 +332,8 @@ static void nordic_spp_packet_handler(uint8_t packet_type, uint16_t channel, uin
         printf_hexdump(packet, size);
         if (handlers.on_uart_receive != NULL) {
             handlers.on_uart_receive(packet, size);
+        } else {
+            handle_default_uart_command(packet, size);
         }
         break;
 
@@ -207,22 +342,20 @@ static void nordic_spp_packet_handler(uint8_t packet_type, uint16_t channel, uin
     }
 }
 
-static void heartbeat_handler(struct btstack_timer_source *ts)
+static void heartbeat_handler(void)
 {
     poll_temp();
 
     if (spp_con_handle != HCI_CON_HANDLE_INVALID) {
-        build_spp_line();
-        spp_send_request.callback = &nordic_can_send;
-        nordic_spp_service_server_request_can_send_now(&spp_send_request, spp_con_handle);
+        spp_counter++;
+        pico_ble_stack_uart_sendf("demo,%u,temp_c=%.2f\r\n", spp_counter, current_temp_c);
     }
 
     if (handlers.on_tick != NULL) {
         handlers.on_tick();
+    } else {
+        handle_default_tick();
     }
-
-    btstack_run_loop_set_timer(ts, HEARTBEAT_PERIOD_MS);
-    btstack_run_loop_add_timer(ts);
 }
 
 int pico_ble_stack_run(void)
@@ -245,14 +378,17 @@ int pico_ble_stack_run(void)
     hci_event_callback_registration.callback = &hci_event_handler;
     hci_add_event_handler(&hci_event_callback_registration);
 
-    heartbeat.process = &heartbeat_handler;
-    btstack_run_loop_set_timer(&heartbeat, HEARTBEAT_PERIOD_MS);
-    btstack_run_loop_add_timer(&heartbeat);
-
     hci_power_control(HCI_POWER_ON);
 
+    absolute_time_t next_heartbeat = make_timeout_time_ms(HEARTBEAT_PERIOD_MS);
     while (true) {
         async_context_poll(cyw43_arch_async_context());
-        async_context_wait_for_work_until(cyw43_arch_async_context(), at_the_end_of_time);
+
+        if (absolute_time_diff_us(get_absolute_time(), next_heartbeat) <= 0) {
+            heartbeat_handler();
+            next_heartbeat = make_timeout_time_ms(HEARTBEAT_PERIOD_MS);
+        }
+
+        async_context_wait_for_work_until(cyw43_arch_async_context(), next_heartbeat);
     }
 }
