@@ -1,5 +1,5 @@
 #Set name for the generated firmware output .elf .hex
-set(FIRMWARE_NAME pico_sdk_template_C)
+set(FIRMWARE_NAME pico_ble_template)
 
 # Create the executable
 add_executable(${FIRMWARE_NAME}
