@@ -6,12 +6,12 @@ and settings to build, flash, and debug.
 ## Bluefruit UART
 
 The firmware exposes the Nordic UART service used by Adafruit Bluefruit Connect
-on Pico W / Pico 2 W boards. It advertises as `UART-ND`.
+on Pico W / Pico 2 W boards. It advertises as `PICO-BLE-DEMO`.
 
 Use the Adafruit Bluefruit Connect app:
 
 1. Open the app.
-2. Select the device named `UART-ND`.
+2. Select the device named `PICO-BLE-DEMO`.
 3. Open the UART module.
 4. Send text commands from the app's UART text input.
 
@@ -132,13 +132,13 @@ If you do not want automatic telemetry, remove or change the send logic in
 
 ### Where To Change The BLE Device Name
 
-The current device name is `UART-ND`.
+The current device name is `PICO-BLE-DEMO`.
 
 Set the advertised and GAP device name from `src/main.c` before starting the
 BLE stack:
 
 ```c
-pico_ble_stack_set_device_name("UART-ND");
+pico_ble_stack_set_device_name("PICO-BLE-DEMO");
 ```
 
 Keep the BLE name short. This project stores up to 29 characters in the scan

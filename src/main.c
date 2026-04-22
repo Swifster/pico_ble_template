@@ -166,7 +166,7 @@ int main(void)
     };
 
     stdio_init_all();
-    pico_ble_stack_set_device_name("UART-ND");
+    pico_ble_stack_set_device_name("PICO-BLE-DEMO");
     pico_ble_stack_set_handlers(&ble_handlers);
     return pico_ble_stack_run();
 }
