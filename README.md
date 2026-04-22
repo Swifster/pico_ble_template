@@ -3,6 +3,178 @@
 This project uses the Raspberry Pi Pico SDK with a small set of VS Code tasks
 and settings to build, flash, and debug.
 
+## Bluefruit UART
+
+The firmware exposes the Nordic UART service used by Adafruit Bluefruit Connect
+on Pico W / Pico 2 W boards. It advertises as `UART`.
+
+Use the Adafruit Bluefruit Connect app:
+
+1. Open the app.
+2. Select the device named `UART`.
+3. Open the UART module.
+4. Send text commands from the app's UART text input.
+
+The Pico sends temperature telemetry once per second over UART notifications:
+
+```text
+demo,1,temp_c=27.98
+```
+
+Text commands can be written from the phone to the UART RX characteristic:
+
+```text
+light led
+led off
+led toggle
+led blink
+temp
+help
+```
+
+The current replies look like this:
+
+```text
+ok,led=on
+ok,led=off
+ok,led=blink
+status,temp_c=27.98,led=blink
+error,unknown command: something
+```
+
+### How Commands Are Received
+
+Command receiving starts in `src/main.c`.
+
+`main()` registers the BLE callbacks:
+
+```c
+const pico_ble_stack_handlers_t ble_handlers = {
+    .on_uart_receive = handle_uart_command,
+    .on_tick = handle_ble_tick,
+    .on_connection_change = handle_ble_connection_change,
+};
+
+pico_ble_stack_set_handlers(&ble_handlers);
+```
+
+When the phone sends UART text, the BLE stack calls:
+
+```c
+static void handle_uart_command(const uint8_t *packet, uint16_t size)
+```
+
+That function:
+
+- trims spaces and newlines
+- converts uppercase letters to lowercase
+- compares the command text
+- performs the action
+- sends a response back over BLE UART
+
+For example, this block handles `led on`, `light led`, and `on`:
+
+```c
+if (command_equals(command, "light led") ||
+    command_equals(command, "led on") ||
+    command_equals(command, "on")) {
+    led_mode = LED_MODE_ON;
+    apply_led_mode();
+    pico_ble_stack_uart_send("ok,led=on\r\n");
+    return;
+}
+```
+
+### How To Add A New Command
+
+Add another `if` block inside `handle_uart_command()` in `src/main.c`.
+
+Example:
+
+```c
+if (command_equals(command, "hello")) {
+    pico_ble_stack_uart_send("hello from pico\r\n");
+    return;
+}
+```
+
+Then rebuild and flash the firmware. In Bluefruit Connect, send:
+
+```text
+hello
+```
+
+The app should receive:
+
+```text
+hello from pico
+```
+
+### How To Send Data To The Phone
+
+Use these helpers from `lib/pico_ble_stack/pico_ble_stack.h`:
+
+```c
+pico_ble_stack_uart_send("plain text\r\n");
+pico_ble_stack_uart_sendf("value=%d\r\n", value);
+```
+
+Use `\r\n` at the end of messages so terminal apps display each response on a
+new line.
+
+The current firmware sends automatic telemetry once per second from
+`lib/pico_ble_stack/pico_ble_stack.c`:
+
+```text
+demo,1,temp_c=27.98
+```
+
+If you do not want automatic telemetry, remove or change the send logic in
+`heartbeat_handler()` in `lib/pico_ble_stack/pico_ble_stack.c`.
+
+### Where To Change The BLE Device Name
+
+The current device name is `UART`.
+
+Change both of these places so the advertising name and GAP device name match:
+
+1. `lib/pico_ble_stack/pico_ble_stack.c`
+
+```c
+static const uint8_t scan_response_data[] = {
+    0x05, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
+    'U', 'A', 'R', 'T',
+};
+```
+
+For a new name, update the length byte and the characters. The first byte is
+the number of following bytes in this advertising field: one byte for
+`BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME` plus the name length.
+
+Example for `PICO BLE`:
+
+```c
+static const uint8_t scan_response_data[] = {
+    0x09, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
+    'P', 'I', 'C', 'O', ' ', 'B', 'L', 'E',
+};
+```
+
+2. `lib/pico_ble_stack/bluefruit_uart.gatt`
+
+```text
+CHARACTERISTIC, GAP_DEVICE_NAME, READ, "UART"
+```
+
+Example:
+
+```text
+CHARACTERISTIC, GAP_DEVICE_NAME, READ, "PICO BLE"
+```
+
+Keep the BLE name short. BLE advertising data is limited, and this project
+keeps the full name in the scan response packet.
+
 ## Board And Chip Selection
 
 There are two separate choices in this project:
@@ -142,28 +314,20 @@ step than a normal incremental build.
 The current application uses:
 
 - `src/main.c`
-- `lib/digital_io/digital_io.h`
-- `lib/digital_io/digital_io.c`
+- `lib/pico_ble_stack`
 
-`src/main.c` uses:
-
-- `PICO_DEFAULT_LED_PIN`
-
-`digital_io` checks for CYW43 support through Pico SDK defines and only enables
-the special onboard LED path on W boards. The relevant symbol is:
+`lib/pico_ble_stack` uses the CYW43 wireless chip and onboard LED. This requires
+a W board selection:
 
 - `PICO_W_LED_PIN`
+- `CYW43_WL_GPIO_LED_PIN`
 
 Implications:
 
-- On `pico_w` and `pico2_w`, `PICO_W_LED_PIN` maps to the CYW43 LED
-- On non-W boards, `PICO_W_LED_PIN` becomes invalid and must not be used as a
-  real GPIO
-- `PICO_DEFAULT_LED_PIN` in `src/main.c` still resolves according to the board
-  selected in the Pico SDK
+- Use `pico_w` or `pico2_w` for this firmware.
+- Non-W boards do not have the CYW43 Bluetooth controller required by this app.
 
-If your application code uses either the board default LED or the Pico W
-special LED handling, the board selection must match the actual hardware.
+The board selection must match the actual hardware.
 
 #### 6. Generated Build Files
 
@@ -203,7 +367,7 @@ For RP2040 Pico:
 - `CMakeLists.txt` -> `PICO_JLINK_CORE=0` or `1`
 - `.vscode/settings.json` -> `pico.uploadTarget=rp2040`
 - `.vscode/settings.json` -> `pico.uploadTargetUppercase=RP2040`
-- `src/main.c` -> `PICO_DEFAULT_LED_PIN` now resolves for `pico`
+- This BLE firmware is not supported on non-W Pico boards
 
 For RP2040 Pico W:
 
@@ -212,7 +376,7 @@ For RP2040 Pico W:
 - `CMakeLists.txt` -> `PICO_JLINK_CORE=0` or `1`
 - `.vscode/settings.json` -> `pico.uploadTarget=rp2040`
 - `.vscode/settings.json` -> `pico.uploadTargetUppercase=RP2040`
-- `src/main.c` -> `PICO_DEFAULT_LED_PIN` now resolves for `pico_w`
+- Bluefruit UART firmware is supported
 
 For RP2350 Pico 2:
 
@@ -221,7 +385,7 @@ For RP2350 Pico 2:
 - `CMakeLists.txt` -> `PICO_JLINK_CORE=0` or `1`
 - `.vscode/settings.json` -> `pico.uploadTarget=rp2350`
 - `.vscode/settings.json` -> `pico.uploadTargetUppercase=RP2350`
-- `src/main.c` -> `PICO_DEFAULT_LED_PIN` now resolves for `pico2`
+- This BLE firmware is not supported on non-W Pico boards
 - `.vscode/launch.json` J-Link entry must be reviewed before J-Link debugging
 - `.vscode/tasks.json` `Flash(J-Link)` task must be reviewed before J-Link
   flashing
@@ -233,7 +397,7 @@ For RP2350 Pico 2 W:
 - `CMakeLists.txt` -> `PICO_JLINK_CORE=0` or `1`
 - `.vscode/settings.json` -> `pico.uploadTarget=rp2350`
 - `.vscode/settings.json` -> `pico.uploadTargetUppercase=RP2350`
-- `src/main.c` -> `PICO_DEFAULT_LED_PIN` now resolves for `pico2_w`
+- Bluefruit UART firmware is supported
 - `.vscode/launch.json` J-Link entry must be reviewed before J-Link debugging
 - `.vscode/tasks.json` `Flash(J-Link)` task must be reviewed before J-Link
   flashing
