@@ -24,7 +24,7 @@ demo,1,temp_c=27.98
 Text commands can be written from the phone to the UART RX characteristic:
 
 ```text
-light led
+led on
 led off
 led toggle
 led blink
@@ -66,18 +66,16 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
 
 That function:
 
-- trims spaces and newlines
-- converts uppercase letters to lowercase
+- copies the received packet into a small command string
+- removes the trailing line ending
 - compares the command text
 - performs the action
 - sends a response back over BLE UART
 
-For example, this block handles `led on`, `light led`, and `on`:
+For example, this block handles `led on`:
 
 ```c
-if (command_equals(command, "light led") ||
-    command_equals(command, "led on") ||
-    command_equals(command, "on")) {
+if (command_equals(command, "led on")) {
     led_mode = LED_MODE_ON;
     apply_led_mode();
     pico_ble_stack_uart_send("ok,led=on\r\n");
@@ -123,57 +121,28 @@ Use `\r\n` at the end of messages so terminal apps display each response on a
 new line.
 
 The current firmware sends automatic telemetry once per second from
-`lib/pico_ble_stack/pico_ble_stack.c`:
+`handle_ble_tick()` in `src/main.c`:
 
 ```text
 demo,1,temp_c=27.98
 ```
 
 If you do not want automatic telemetry, remove or change the send logic in
-`heartbeat_handler()` in `lib/pico_ble_stack/pico_ble_stack.c`.
+`handle_ble_tick()` in `src/main.c`.
 
 ### Where To Change The BLE Device Name
 
 The current device name is `UART-ND`.
 
-Change both of these places so the advertising name and GAP device name match:
-
-1. `lib/pico_ble_stack/pico_ble_stack.c`
-
-```c
-static const uint8_t scan_response_data[] = {
-    0x05, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
-    'U', 'A', 'R', 'T',
-};
-```
-
-For a new name, update the length byte and the characters. The first byte is
-the number of following bytes in this advertising field: one byte for
-`BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME` plus the name length.
-
-Example for `PICO BLE`:
+Set the advertised and GAP device name from `src/main.c` before starting the
+BLE stack:
 
 ```c
-static const uint8_t scan_response_data[] = {
-    0x09, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
-    'P', 'I', 'C', 'O', ' ', 'B', 'L', 'E',
-};
+pico_ble_stack_set_device_name("UART-ND");
 ```
 
-2. `lib/pico_ble_stack/bluefruit_uart.gatt`
-
-```text
-CHARACTERISTIC, GAP_DEVICE_NAME, READ, "UART"
-```
-
-Example:
-
-```text
-CHARACTERISTIC, GAP_DEVICE_NAME, READ, "PICO BLE"
-```
-
-Keep the BLE name short. BLE advertising data is limited, and this project
-keeps the full name in the scan response packet.
+Keep the BLE name short. This project stores up to 29 characters in the scan
+response packet; longer names are truncated.
 
 ## Board And Chip Selection
 

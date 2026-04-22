@@ -17,6 +17,7 @@
 #define HEARTBEAT_PERIOD_MS 1000
 #define ADC_CHANNEL_TEMPSENSOR 4
 #define APP_AD_FLAGS 0x06
+#define DEVICE_NAME_MAX_LEN 29
 
 static uint8_t adv_data[] = {
     0x02, BLUETOOTH_DATA_TYPE_FLAGS, APP_AD_FLAGS,
@@ -26,15 +27,12 @@ static uint8_t adv_data[] = {
 };
 static const uint8_t adv_data_len = sizeof(adv_data);
 
-static const uint8_t scan_response_data[] = {
-    0x08, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME,
-    'U', 'A', 'R', 'T', '-', 'N', 'D',
-};
-static const uint8_t scan_response_data_len = sizeof(scan_response_data);
+static char device_name[DEVICE_NAME_MAX_LEN + 1] = "UART-ND";
+static uint8_t scan_response_data[2 + DEVICE_NAME_MAX_LEN];
+static uint8_t scan_response_data_len;
 
 static hci_con_handle_t spp_con_handle = HCI_CON_HANDLE_INVALID;
 static float current_temp_c;
-static unsigned spp_counter;
 static char spp_line[64];
 static uint16_t spp_line_len;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
@@ -44,6 +42,35 @@ static pico_ble_stack_handlers_t handlers;
 extern uint8_t const profile_data[];
 
 static void nordic_can_send(void *context);
+
+static void update_scan_response_data(void)
+{
+    size_t name_len = strnlen(device_name, DEVICE_NAME_MAX_LEN);
+
+    scan_response_data[0] = (uint8_t)(name_len + 1);
+    scan_response_data[1] = BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME;
+    memcpy(&scan_response_data[2], device_name, name_len);
+    scan_response_data_len = (uint8_t)(name_len + 2);
+}
+
+static uint16_t att_read_callback(hci_con_handle_t connection_handle,
+                                  uint16_t att_handle,
+                                  uint16_t offset,
+                                  uint8_t *buffer,
+                                  uint16_t buffer_size)
+{
+    UNUSED(connection_handle);
+
+    if (att_handle == ATT_CHARACTERISTIC_GAP_DEVICE_NAME_01_VALUE_HANDLE) {
+        return att_read_callback_handle_blob((const uint8_t *)device_name,
+                                             (uint16_t)strnlen(device_name, DEVICE_NAME_MAX_LEN),
+                                             offset,
+                                             buffer,
+                                             buffer_size);
+    }
+
+    return 0;
+}
 
 static void poll_temp(void)
 {
@@ -66,6 +93,20 @@ void pico_ble_stack_set_handlers(const pico_ble_stack_handlers_t *new_handlers)
     } else {
         handlers = *new_handlers;
     }
+}
+
+void pico_ble_stack_set_device_name(const char *name)
+{
+    if (name == NULL || name[0] == '\0') {
+        return;
+    }
+
+    snprintf(device_name, sizeof(device_name), "%s", name);
+}
+
+const char *pico_ble_stack_get_device_name(void)
+{
+    return device_name;
 }
 
 bool pico_ble_stack_uart_is_connected(void)
@@ -140,6 +181,7 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
         gap_advertisements_set_params(800, 800, 0, 0, null_addr, 0x07, 0x00);
         assert(adv_data_len <= 31);
         gap_advertisements_set_data(adv_data_len, adv_data);
+        update_scan_response_data();
         gap_scan_response_set_data(scan_response_data_len, (uint8_t *)scan_response_data);
         gap_advertisements_enable(1);
 
@@ -200,11 +242,6 @@ static void heartbeat_handler(void)
 {
     poll_temp();
 
-    if (spp_con_handle != HCI_CON_HANDLE_INVALID) {
-        spp_counter++;
-        pico_ble_stack_uart_sendf("demo,%u,temp_c=%.2f\r\n", spp_counter, current_temp_c);
-    }
-
     if (handlers.on_tick != NULL) {
         handlers.on_tick();
     }
@@ -224,7 +261,7 @@ int pico_ble_stack_run(void)
     l2cap_init();
     sm_init();
 
-    att_server_init(profile_data, NULL, NULL);
+    att_server_init(profile_data, att_read_callback, NULL);
     nordic_spp_service_server_init(&nordic_spp_packet_handler);
 
     hci_event_callback_registration.callback = &hci_event_handler;

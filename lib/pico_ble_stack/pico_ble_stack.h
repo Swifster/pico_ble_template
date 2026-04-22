@@ -15,6 +15,8 @@ typedef struct {
 } pico_ble_stack_handlers_t;
 
 void pico_ble_stack_set_handlers(const pico_ble_stack_handlers_t *handlers);
+void pico_ble_stack_set_device_name(const char *name);
+const char *pico_ble_stack_get_device_name(void);
 bool pico_ble_stack_uart_is_connected(void);
 void pico_ble_stack_uart_send(const char *message);
 void pico_ble_stack_uart_sendf(const char *format, ...);
