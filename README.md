@@ -8,6 +8,9 @@ and settings to build, flash, and debug.
 The firmware exposes the Nordic UART service used by Adafruit Bluefruit Connect
 on Pico W / Pico 2 W boards. It advertises as `PICO-BLE-DEMO`.
 
+For a deeper explanation of the application flow and each function in
+`src/main.c`, read [docs/main-function-guide.md](docs/main-function-guide.md).
+
 Use the Adafruit Bluefruit Connect app:
 
 1. Open the app.
@@ -29,6 +32,10 @@ led off
 led toggle
 led blink
 temp
+temp float
+temp status
+temp start
+temp stop
 help
 ```
 
@@ -39,6 +46,9 @@ ok,led=on
 ok,led=off
 ok,led=blink
 status,temp_c=27.98,led=blink
+ok,temp=status
+ok,temp=started
+ok,temp=stopped
 error,unknown command: something
 ```
 
@@ -76,8 +86,7 @@ For example, this block handles `led on`:
 
 ```c
 if (command_equals(command, "led on")) {
-    led_mode = LED_MODE_ON;
-    apply_led_mode();
+    set_led_mode(LED_MODE_ON);
     pico_ble_stack_uart_send("ok,led=on\r\n");
     return;
 }
