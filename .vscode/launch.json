@@ -97,7 +97,7 @@
             "type": "cortex-debug",
             "interface": "swd",
             "serialNumber": "${config:pico.jlinkSerialNumber}",
-            "device": "RP2040_M0_0",
+            "device": "${config:pico.jlinkDevice}",
             "svdPath": "${config:cmake.configureEnvironment.PICO_SDK_PATH}/src/${config:pico.uploadTarget}/hardware_regs/${config:pico.uploadTargetUppercase}.svd",
             "rttConfig": {
                 "enabled": true,

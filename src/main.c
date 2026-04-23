@@ -6,6 +6,7 @@
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 #include "pico_ble_stack.h"
+#include "picotemp.h"
 
 typedef enum
 {
@@ -16,6 +17,11 @@ typedef enum
 
 static led_mode_t led_mode = LED_MODE_OFF;
 static unsigned telemetry_counter;
+
+static float read_temperature_c(void)
+{
+    return read_onboard_temperature('C');
+}
 
 static void apply_led_mode(void)
 {
@@ -116,7 +122,7 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
     if (command_equals(command, "temp"))
     {
         pico_ble_stack_uart_sendf("status,temp_c=%.2f,led=%s\r\n",
-                                  pico_ble_stack_get_temperature_c(),
+                                  read_temperature_c(),
                                   led_mode_name());
         return;
     }
@@ -137,7 +143,7 @@ static void handle_ble_tick(void)
         telemetry_counter++;
         pico_ble_stack_uart_sendf("demo,%u,temp_c=%.2f\r\n",
                                   telemetry_counter,
-                                  pico_ble_stack_get_temperature_c());
+                                  read_temperature_c());
     }
 
     if (led_mode == LED_MODE_BLINK)
@@ -166,6 +172,7 @@ int main(void)
     };
 
     stdio_init_all();
+    picotemp_init();
     pico_ble_stack_set_device_name("PICO-BLE-DEMO");
     pico_ble_stack_set_handlers(&ble_handlers);
     return pico_ble_stack_run();

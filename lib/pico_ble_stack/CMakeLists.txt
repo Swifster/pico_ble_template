@@ -13,7 +13,6 @@ target_link_libraries(pico_ble_stack INTERFACE
     pico_btstack_ble
     pico_btstack_cyw43
     pico_cyw43_arch_none
-    hardware_adc
 )
 
 pico_btstack_make_gatt_header(pico_ble_stack INTERFACE

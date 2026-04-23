@@ -52,7 +52,7 @@ set(PICO_JLINK_CORE "0" CACHE STRING "J-Link core index: 0 or 1")
 set(PICO_REMOTE_HOST "mypi5.local" CACHE STRING "Remote host for OpenOCD/SSH tasks")
 set(PICO_REMOTE_USER "tanel" CACHE STRING "Remote user for OpenOCD/SSH tasks")
 set(PICO_REMOTE_PATH "/home/tanel/picotemp" CACHE STRING "Remote path for firmware uploads")
-set(PICO_FIRMWARE_NAME "pico_sdk_template_C" CACHE STRING "Firmware name (without extension)")
+set(PICO_FIRMWARE_NAME "pico_ble_template_C" CACHE STRING "Firmware name (without extension)" FORCE)
 
 
 # Include the Pico SDK

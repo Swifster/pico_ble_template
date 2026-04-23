@@ -6,7 +6,6 @@
 
 #include "ble/gatt-service/nordic_spp_service_server.h"
 #include "btstack.h"
-#include "hardware/adc.h"
 #include "pico/btstack_cyw43.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
@@ -15,7 +14,6 @@
 #include "pico_ble_stack.h"
 
 #define HEARTBEAT_PERIOD_MS 1000
-#define ADC_CHANNEL_TEMPSENSOR 4
 #define APP_AD_FLAGS 0x06
 #define DEVICE_NAME_MAX_LEN 29
 
@@ -32,7 +30,6 @@ static uint8_t scan_response_data[2 + DEVICE_NAME_MAX_LEN];
 static uint8_t scan_response_data_len;
 
 static hci_con_handle_t spp_con_handle = HCI_CON_HANDLE_INVALID;
-static float current_temp_c;
 static char spp_line[64];
 static uint16_t spp_line_len;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
@@ -72,20 +69,6 @@ static uint16_t att_read_callback(hci_con_handle_t connection_handle,
     return 0;
 }
 
-static void poll_temp(void)
-{
-    adc_select_input(ADC_CHANNEL_TEMPSENSOR);
-    uint32_t raw32 = adc_read();
-    const uint32_t bits = 12;
-    uint16_t raw16 = raw32 << (16 - bits) | raw32 >> (2 * bits - 16);
-
-    const float conversion_factor = 3.3f / 65535.0f;
-    float reading = raw16 * conversion_factor;
-    current_temp_c = 27.0f - (reading - 0.706f) / 0.001721f;
-
-    printf("Write temp %.2f degc\n", current_temp_c);
-}
-
 void pico_ble_stack_set_handlers(const pico_ble_stack_handlers_t *new_handlers)
 {
     if (new_handlers == NULL) {
@@ -112,11 +95,6 @@ const char *pico_ble_stack_get_device_name(void)
 bool pico_ble_stack_uart_is_connected(void)
 {
     return spp_con_handle != HCI_CON_HANDLE_INVALID;
-}
-
-float pico_ble_stack_get_temperature_c(void)
-{
-    return current_temp_c;
 }
 
 void pico_ble_stack_uart_send(const char *message)
@@ -184,8 +162,6 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
         update_scan_response_data();
         gap_scan_response_set_data(scan_response_data_len, (uint8_t *)scan_response_data);
         gap_advertisements_enable(1);
-
-        poll_temp();
         break;
 
     default:
@@ -240,8 +216,6 @@ static void nordic_spp_packet_handler(uint8_t packet_type, uint16_t channel, uin
 
 static void heartbeat_handler(void)
 {
-    poll_temp();
-
     if (handlers.on_tick != NULL) {
         handlers.on_tick();
     }
@@ -253,10 +227,6 @@ int pico_ble_stack_run(void)
         printf("failed to initialise cyw43_arch\n");
         return -1;
     }
-
-    adc_init();
-    adc_select_input(ADC_CHANNEL_TEMPSENSOR);
-    adc_set_temp_sensor_enabled(true);
 
     l2cap_init();
     sm_init();

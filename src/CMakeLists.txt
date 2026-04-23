@@ -1,5 +1,5 @@
 #Set name for the generated firmware output .elf .hex
-set(FIRMWARE_NAME pico_ble_template)
+set(FIRMWARE_NAME pico_ble_template_C)
 
 # Create the executable
 add_executable(${FIRMWARE_NAME}
@@ -16,6 +16,7 @@ set_target_properties(${FIRMWARE_NAME}  PROPERTIES
 target_link_libraries(${FIRMWARE_NAME} 
     pico_stdlib
     pico_ble_stack
+    picotemp
 )
 
 target_include_directories(${FIRMWARE_NAME}  PRIVATE

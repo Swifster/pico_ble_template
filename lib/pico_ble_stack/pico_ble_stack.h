@@ -20,7 +20,6 @@ const char *pico_ble_stack_get_device_name(void);
 bool pico_ble_stack_uart_is_connected(void);
 void pico_ble_stack_uart_send(const char *message);
 void pico_ble_stack_uart_sendf(const char *format, ...);
-float pico_ble_stack_get_temperature_c(void);
 int pico_ble_stack_run(void);
 
 #endif
