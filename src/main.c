@@ -8,6 +8,9 @@
 #include "pico_ble_stack.h"
 #include "picotemp.h"
 
+#define UART_COMMAND_MAX_LEN 48
+#define UART_HELP_TEXT "commands: led on, led off, led toggle, led blink, temp, temp start, temp stop\r\n"
+
 typedef enum
 {
     LED_MODE_BLINK,
@@ -16,6 +19,7 @@ typedef enum
 } led_mode_t;
 
 static led_mode_t led_mode = LED_MODE_OFF;
+static bool telemetry_enabled = true;
 static unsigned telemetry_counter;
 
 static float read_temperature_c(void)
@@ -33,6 +37,12 @@ static void apply_led_mode(void)
     {
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
     }
+}
+
+static void set_led_mode(led_mode_t mode)
+{
+    led_mode = mode;
+    apply_led_mode();
 }
 
 static const char *led_mode_name(void)
@@ -80,7 +90,7 @@ static bool command_equals(const char *command, const char *expected)
 
 static void handle_uart_command(const uint8_t *packet, uint16_t size)
 {
-    char command[48];
+    char command[UART_COMMAND_MAX_LEN];
     if (copy_command(packet, size, command, sizeof(command)) == 0)
     {
         return;
@@ -90,24 +100,21 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
 
     if (command_equals(command, "led on"))
     {
-        led_mode = LED_MODE_ON;
-        apply_led_mode();
+        set_led_mode(LED_MODE_ON);
         pico_ble_stack_uart_send("ok,led=on\r\n");
         return;
     }
 
     if (command_equals(command, "led off"))
     {
-        led_mode = LED_MODE_OFF;
-        apply_led_mode();
+        set_led_mode(LED_MODE_OFF);
         pico_ble_stack_uart_send("ok,led=off\r\n");
         return;
     }
 
     if (command_equals(command, "led toggle"))
     {
-        led_mode = led_mode == LED_MODE_ON ? LED_MODE_OFF : LED_MODE_ON;
-        apply_led_mode();
+        set_led_mode(led_mode == LED_MODE_ON ? LED_MODE_OFF : LED_MODE_ON);
         pico_ble_stack_uart_sendf("ok,led=%s\r\n", led_mode_name());
         return;
     }
@@ -127,9 +134,23 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
         return;
     }
 
+    if (command_equals(command, "temp start"))
+    {
+        telemetry_enabled = true;
+        pico_ble_stack_uart_send("ok,temp=started\r\n");
+        return;
+    }
+
+    if (command_equals(command, "temp stop"))
+    {
+        telemetry_enabled = false;
+        pico_ble_stack_uart_send("ok,temp=stopped\r\n");
+        return;
+    }
+
     if (command_equals(command, "help"))
     {
-        pico_ble_stack_uart_send("commands: led on, led off, led toggle, led blink, temp\r\n");
+        pico_ble_stack_uart_send(UART_HELP_TEXT);
         return;
     }
 
@@ -138,7 +159,7 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
 
 static void handle_ble_tick(void)
 {
-    if (pico_ble_stack_uart_is_connected())
+    if (telemetry_enabled && pico_ble_stack_uart_is_connected())
     {
         telemetry_counter++;
         pico_ble_stack_uart_sendf("demo,%u,temp_c=%.2f\r\n",
