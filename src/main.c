@@ -9,7 +9,7 @@
 #include "picotemp.h"
 
 #define UART_COMMAND_MAX_LEN 48
-#define UART_HELP_TEXT "commands: led on, led off, led toggle, led blink, temp, temp start, temp stop\r\n"
+#define UART_HELP_TEXT "commands: led on, led off, led toggle, led blink, temp, temp float, temp status, temp start, temp stop\r\n"
 
 typedef enum
 {
@@ -18,8 +18,15 @@ typedef enum
     LED_MODE_OFF,
 } led_mode_t;
 
+typedef enum
+{
+    TELEMETRY_FORMAT_STATUS,
+    TELEMETRY_FORMAT_FLOAT,
+} telemetry_format_t;
+
 static led_mode_t led_mode = LED_MODE_OFF;
 static bool telemetry_enabled = true;
+static telemetry_format_t telemetry_format = TELEMETRY_FORMAT_STATUS;
 static unsigned telemetry_counter;
 
 static float read_temperature_c(void)
@@ -88,6 +95,11 @@ static bool command_equals(const char *command, const char *expected)
     return strcmp(command, expected) == 0;
 }
 
+static void send_temperature_float(void)
+{
+    pico_ble_stack_uart_sendf("%.2f\r\n", read_temperature_c());
+}
+
 static void handle_uart_command(const uint8_t *packet, uint16_t size)
 {
     char command[UART_COMMAND_MAX_LEN];
@@ -134,6 +146,21 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
         return;
     }
 
+    if (command_equals(command, "temp float"))
+    {
+        telemetry_format = TELEMETRY_FORMAT_FLOAT;
+        telemetry_enabled = true;
+        send_temperature_float();
+        return;
+    }
+
+    if (command_equals(command, "temp status"))
+    {
+        telemetry_format = TELEMETRY_FORMAT_STATUS;
+        pico_ble_stack_uart_send("ok,temp=status\r\n");
+        return;
+    }
+
     if (command_equals(command, "temp start"))
     {
         telemetry_enabled = true;
@@ -162,9 +189,16 @@ static void handle_ble_tick(void)
     if (telemetry_enabled && pico_ble_stack_uart_is_connected())
     {
         telemetry_counter++;
-        pico_ble_stack_uart_sendf("demo,%u,temp_c=%.2f\r\n",
-                                  telemetry_counter,
-                                  read_temperature_c());
+        if (telemetry_format == TELEMETRY_FORMAT_FLOAT)
+        {
+            send_temperature_float();
+        }
+        else
+        {
+            pico_ble_stack_uart_sendf("demo,%u,temp_c=%.2f\r\n",
+                                      telemetry_counter,
+                                      read_temperature_c());
+        }
     }
 
     if (led_mode == LED_MODE_BLINK)
