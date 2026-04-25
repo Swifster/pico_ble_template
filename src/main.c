@@ -9,7 +9,7 @@
 #include "picotemp.h"
 
 #define UART_COMMAND_MAX_LEN 48
-#define UART_HELP_TEXT "commands: led on, led off, led toggle, led blink, temp, temp float, temp status, temp start, temp stop\r\n"
+#define UART_HELP_TEXT "commands: led on, led off, led toggle, led blink, temp, temp float, temp status, temp start, temp stop, rssi, rssi start, rssi stop\r\n"
 
 typedef enum
 {
@@ -26,6 +26,7 @@ typedef enum
 
 static led_mode_t led_mode = LED_MODE_OFF;
 static bool telemetry_enabled = true;
+static bool rssi_telemetry_enabled;
 static telemetry_format_t telemetry_format = TELEMETRY_FORMAT_STATUS;
 static unsigned telemetry_counter;
 
@@ -175,6 +176,29 @@ static void handle_uart_command(const uint8_t *packet, uint16_t size)
         return;
     }
 
+    if (command_equals(command, "rssi"))
+    {
+        if (!pico_ble_stack_uart_request_rssi())
+        {
+            pico_ble_stack_uart_send("error,rssi=unavailable\r\n");
+        }
+        return;
+    }
+
+    if (command_equals(command, "rssi start"))
+    {
+        rssi_telemetry_enabled = true;
+        pico_ble_stack_uart_send("ok,rssi=started\r\n");
+        return;
+    }
+
+    if (command_equals(command, "rssi stop"))
+    {
+        rssi_telemetry_enabled = false;
+        pico_ble_stack_uart_send("ok,rssi=stopped\r\n");
+        return;
+    }
+
     if (command_equals(command, "help"))
     {
         pico_ble_stack_uart_send(UART_HELP_TEXT);
@@ -199,6 +223,11 @@ static void handle_ble_tick(void)
                                       telemetry_counter,
                                       read_temperature_c());
         }
+    }
+
+    if (rssi_telemetry_enabled && pico_ble_stack_uart_is_connected())
+    {
+        pico_ble_stack_uart_request_rssi();
     }
 
     if (led_mode == LED_MODE_BLINK)

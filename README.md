@@ -36,6 +36,9 @@ temp float
 temp status
 temp start
 temp stop
+rssi
+rssi start
+rssi stop
 help
 ```
 
@@ -49,6 +52,9 @@ status,temp_c=27.98,led=blink
 ok,temp=status
 ok,temp=started
 ok,temp=stopped
+status,rssi_dbm=-55
+ok,rssi=started
+ok,rssi=stopped
 error,unknown command: something
 ```
 

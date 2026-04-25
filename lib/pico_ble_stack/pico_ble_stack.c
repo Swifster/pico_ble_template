@@ -97,6 +97,15 @@ bool pico_ble_stack_uart_is_connected(void)
     return spp_con_handle != HCI_CON_HANDLE_INVALID;
 }
 
+bool pico_ble_stack_uart_request_rssi(void)
+{
+    if (spp_con_handle == HCI_CON_HANDLE_INVALID) {
+        return false;
+    }
+
+    return gap_read_rssi(spp_con_handle) != 0;
+}
+
 void pico_ble_stack_uart_send(const char *message)
 {
     if (message == NULL || spp_con_handle == HCI_CON_HANDLE_INVALID) {
@@ -145,6 +154,13 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
     }
 
     switch (hci_event_packet_get_type(packet)) {
+    case GAP_EVENT_RSSI_MEASUREMENT:
+        if (gap_event_rssi_measurement_get_con_handle(packet) == spp_con_handle) {
+            pico_ble_stack_uart_sendf("status,rssi_dbm=%d\r\n",
+                                      (int8_t)gap_event_rssi_measurement_get_rssi(packet));
+        }
+        break;
+
     case BTSTACK_EVENT_STATE:
         if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) {
             return;
